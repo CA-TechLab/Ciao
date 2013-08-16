@@ -1,0 +1,25 @@
+#######################################
+# Syntax Coloring Map For Ultrasound
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+JPCA	KEYWORD1
+JPCB	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+go	KEYWORD2
+check	KEYWORD2
+xfb	KEYWORD2
+vfb	KEYWORD2
+vref	KEYWORD2
+kvfb	KEYWORD2
+krev	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
