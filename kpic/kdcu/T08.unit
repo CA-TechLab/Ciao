@@ -1,0 +1,40 @@
+;Unit code#:08
+;Base design#:08/T&U
+;Dial select:No
+
+#include <p12f683.inc>
+	__config _CP_OFF & _WDT_OFF & _PWRTE_OFF & _INTOSCIO & _BOD_OFF & _MCLRE_OFF & _IESO_OFF & _FCMEN_OFF
+#define	FET	GPIO,2
+#define	SPW	GPIO,5
+#define	SIN	GPIO,3
+
+#define	Ussl	de 0,6
+
+Uinit macro
+	banksel TRISIO
+	bcf		FET
+	bcf		SPW
+	clrf	WPU
+	banksel	TMR0
+	endm
+Uadcon0	macro
+	kadstart 0
+	endm
+;;;;I/O;;;; 
+Uson macro
+	bcf		SPW
+	endm
+Usoff macro
+	bsf		SPW
+	endm
+Usin macro	;set carry if recognized
+	setc
+	btfsc	SIN
+	clrc
+	endm
+Ubon macro
+	bsf		FET
+	endm
+Uboff macro
+	bcf		FET
+	endm

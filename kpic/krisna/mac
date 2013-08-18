@@ -1,0 +1,646 @@
+;
+;Krisna Macros
+;
+;;;;;;;;Common;;;;;;;kinc8	macro
+kmov8	macro	dst,src
+		movfw	src
+		movwf	dst
+		endm
+kmov16	macro	dst,src
+		movfw	src+1
+		movwf	dst+1
+		kmov8	dst,src
+		endm
+kmov24	macro	dst,src
+		movfw	src+2
+		movwf	dst+2
+		kmov16	dst,src
+		endm
+
+kclr8	macro	fr
+		clrf	fr
+		endm
+kclr16	macro	fr
+		clrf	fr
+		clrf	fr+1
+		endm
+kclr24	macro	fr
+		clrf	fr
+		clrf	fr+1
+		clrf	fr+2
+		endm
+
+kset8	macro	num
+		movlw	low(num)
+		movwf	kreg
+		endm
+kset16	macro	num
+		movlw	high(num)
+		movwf	kreg
+		movlw	low(num)
+		movwf	kreg+1
+		endm
+kset24	macro	num
+		movlw	high(num>>8)
+		movwf	kreg
+		movlw	high(num)
+		movwf	kreg+1
+		movlw	low(num)
+		movwf	kreg+2
+		endm
+kset8c	macro	num
+		local	exit
+		kjmpnc	exit
+		kset8	num
+exit
+		endm
+kset8nc	macro	num
+		local	exit
+		kjmpc	exit
+		kset8	num
+exit
+		endm
+kload8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kload8
+		endm
+kload16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kload16
+		endm
+kload24	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kload24
+		endm
+
+kstore8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kstore8
+		endm
+kstore16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kstore16
+		endm
+kstore24	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kstore24
+		endm
+kstore32	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kstore32
+		endm
+kstor8		macro	fr
+		kstore8	fr
+		endm
+kstor16		macro	fr
+		kstore16 fr
+		endm
+kstor24		macro	fr
+		kstore24 fr
+		endm
+kstor32		macro	fr
+		kstore32 fr
+		endm
+kswap8	macro	fr
+		movfw	kreg
+		xorwf	fr,F
+		xorwf	fr,W
+		xorwf	fr,F
+		movwf	kreg
+		endm
+
+kjmpns	macro	fr,bt,lb
+		btfss	fr,bt
+		goto	lb
+		endm
+
+kjmps	macro	fr,bt,lb
+		btfsc	fr,bt
+		goto	lb
+		endm
+
+kjmpz	macro	lb
+		kjmps	STATUS,Z,lb
+		endm
+
+kjmpnz	macro	lb
+		kjmpns	STATUS,Z,lb
+		endm
+
+kjmpc	macro	lb
+		kjmps	STATUS,C,lb
+		endm
+
+kjmpnc	macro	lb
+		kjmpns	STATUS,C,lb
+		endm
+
+kjmptbl	macro
+		movwf	PCLATH
+		movlw	high($+8)
+		xorwf	PCLATH,F
+		xorwf	PCLATH,W
+		xorwf	PCLATH,F
+		addlw	low($+4)
+		btfsc	STATUS,C
+		incf	PCLATH,F
+		movwf	PCL
+		endm
+
+kloopns	macro	fr,bt
+		local	lp
+lp
+		btfss	fr,bt
+		goto	lp
+		endm
+
+kloops	macro	fr,bt
+		local	lp
+lp
+		btfsc	fr,bt
+		goto	lp
+		endm
+
+kmacs	macro	fr,bt,mac
+		local	exit
+		kjmpns	fr,bt,exit
+		mac
+exit
+		endm
+
+kmacns	macro	fr,bt,mac
+		local	exit
+		kjmps	fr,bt,exit
+		mac
+exit
+		endm
+
+;;;;;;;;Calcuration;;;;;;;
+kadd8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kadd8
+		endm
+kadd16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kadd16
+		endm
+kadd24	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kadd24
+		endm
+ksub8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@ksub8
+		endm
+ksub16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@ksub16
+		endm
+ksub24	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@ksub24
+		endm
+kcmpU8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kcmpU8
+		endm
+kcmpU16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kcmpU16
+		endm
+kcmpS8	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kcmpS8
+		endm
+kcmpS16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kcmpS16
+		endm
+kcmpL8	macro	n
+		movlw	n
+		movwf	kreg+4
+		kcmpU8	kreg+4
+		endm
+kcmpL16	macro	n
+		movlw	high(n)
+		movwf	kreg+4
+		movlw	low(n)
+		movwf	kreg+5
+		kcmpU16	kreg+4
+		endm
+kmaxU8	macro	fr
+		local	exit
+		kcmpU8	fr
+		kjmps	STATUS,C,exit
+		kload8	fr
+exit
+		endm
+kminU8	macro	fr
+		local	exit
+		kcmpU8	fr
+		kjmpnc	exit
+		kload8	fr
+exit
+		endm
+kmaxU16	macro	fr
+		local	exit
+		kcmpU16	fr
+		kjmpc	exit
+		kload16	fr
+exit
+		endm
+kminU16	macro	fr
+		local	exit
+		kcmpU16	fr
+		kjmpnc	exit
+		kload16	fr
+exit
+		endm
+kmaxS8	macro	fr
+		local	exit
+		kcmpS8	fr
+		kjmpc	exit
+		kload8	fr
+exit
+		endm
+kminS8	macro	fr
+		local	exit
+		kcmpS8	fr
+		kjmpnc	exit
+		kload8	fr
+exit
+		endm
+kmaxS16	macro	fr
+		local	exit
+		kcmpS16	fr
+		kjmpc	exit
+		kload16	fr
+exit
+		endm
+kminS16	macro	fr
+		local	exit
+		kcmpS16	fr
+		kjmpnc	exit
+		kload16	fr
+exit
+		endm
+kmulU8xS8	macro	fr
+		movlw	fr
+		movwf	FSR
+		movfw	kreg
+		call	@kmulS8
+		endm
+kmulU8xS16	macro	fr
+		movlw	fr
+		movwf	FSR
+		movfw	kreg
+		call	@kmulS16
+		endm
+kmulU16xS16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kdmulS16
+		endm
+kmulU8xU8	macro	fr
+		movlw	fr
+		movwf	FSR
+		movfw	kreg
+		call	@kmulU8
+		endm
+kmulU8xU16	macro	fr
+		movlw	fr
+		movwf	FSR
+		movfw	kreg
+		call	@kmulU16
+		endm
+kmulU16xU16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kdmulU16
+		endm
+knorm8	macro	fr
+		movfw	fr
+		call	@knorm8
+		endm
+knorm16	macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@knorm16
+		endm
+kinc8	macro
+		incf	kreg,F
+		endm
+kinc16	macro
+		local	exit
+		incf	kreg+1,F
+		kjmpnz	exit
+		kinc8
+exit
+		endm
+kinc24	macro
+		local	exit
+		incf	kreg+2,F
+		kjmpnz	exit
+		kinc16
+exit
+		endm
+kdec8	macro
+		decf	kreg,F
+		endm
+kdec16	macro
+		local	exit
+		decf	kreg+1,F
+		incf	kreg+1,W
+		kjmpnz	exit
+		kdec8
+exit
+		endm
+kdec24	macro
+		local	exit
+		decf	kreg+2,F
+		incf	kreg+2,W
+		kjmpnz	exit
+		kdec16
+exit
+		endm
+
+;;;;;;;;Bit operation;;;;;;;
+kshrS8 macro	n
+		movlw	n
+		call	@kshrS8
+		endm
+kshrS16 macro	n
+		movlw	n
+		call	@kshrS16
+		endm
+kshrS24 macro	n
+		movlw	n
+		call	@kshrS24
+		endm
+kshrS32 macro	n
+		movlw	n
+		call	@kshrS32
+		endm
+kshlS8 macro	n
+		movlw	n
+		call	@kshlS8
+		endm
+kshlS16 macro	n
+		movlw	n
+		call	@kshlS16
+		endm
+kshlS24 macro	n
+		movlw	n
+		call	@kshlS24
+		endm
+kshlS32 macro	n
+		movlw	n
+		call	@kshlS32
+		endm
+kshrU8 macro	n
+		movlw	n
+		call	@kshrU8
+		endm
+kshrU16 macro	n
+		movlw	n
+		call	@kshrU16
+		endm
+kshrU24 macro	n
+		movlw	n
+		call	@kshrU24
+		endm
+kshrU32 macro	n
+		movlw	n
+		call	@kshrU32
+		endm
+kshlU8 macro	n
+		movlw	n
+		call	@kshlU8
+		endm
+kshlU16 macro	n
+		movlw	n
+		call	@kshlU16
+		endm
+kshlU24 macro	n
+		movlw	n
+		call	@kshlU24
+		endm
+kshlU32 macro	n
+		movlw	n
+		call	@kshlU32
+		endm
+ktrmS16 macro
+		call	@ktrmS16
+		endm
+ktrmS24 macro
+		call	@ktrmS24
+		endm
+ktrmS32 macro
+		call	@ktrmS32
+		endm
+ktrmU16 macro	;not yet
+		call	@ktrmU16
+		endm
+ktrmU24 macro	;not yet
+		call	@ktrmU24
+		endm
+ktrmU32 macro	;not yet
+		call	@ktrmU32
+		endm
+kexmS8 macro
+		call	@kexmS8
+		endm
+kexmS16 macro
+		call	@kexmS16
+		endm
+kexmS24 macro
+		call	@kexmS24
+		endm
+kexmU8 macro
+		call	@kexmU8
+		endm
+kexmU16 macro
+		call	@kexmU16
+		endm
+kexmU24 macro
+		call	@kexmU24
+		endm
+kexlS8 macro
+		clrf	kreg+1
+		endm
+kexlS16 macro
+		clrf	kreg+2
+		endm
+kexlU8 macro
+		clrf	kreg+1
+		endm
+kexlU16 macro
+		clrf	kreg+2
+		endm
+
+;;;;;;;;Format changing;;;;;;;;
+kcvsU8	macro
+		call	@kcvsU8
+		endm
+kcvsU16	macro
+		call	@kcvsU16
+		endm
+kcvsU24	macro
+		call	@kcvsU24
+		endm
+kcvsU32	macro
+		call	@kcvsU32
+		endm
+kcvsS8	macro
+		call	@kcvsS8
+		endm
+kcvsS16	macro
+		call	@kcvsS16
+		endm
+kcvsS24	macro
+		call	@kcvsS24
+		endm
+kcvsS32	macro
+		call	@kcvsS32
+		endm
+knegU8	macro
+		call	@knegU8
+		endm
+knegU16	macro
+		call	@knegU16
+		endm
+knegU24	macro
+		call	@knegU24
+		endm
+knegU32	macro
+		call	@knegU32
+		endm
+knegS8	macro
+		call	@knegS8
+		endm
+knegS16	macro
+		call	@knegS16
+		endm
+knegS24	macro
+		call	@knegS24
+		endm
+knegS32	macro
+		call	@knegS32
+		endm
+kabsS8 macro
+		btfsc	kreg,7
+		call	@knegS8
+		endm
+kabsS16 macro
+		btfsc	kreg,7
+		call	@knegS16
+		endm
+kintegU16 macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kintegU16
+		endm
+kintegS16 macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@kintegS16
+		endm
+;;;;;;;;Timer0;;;;;;;
+kt0set	macro
+		call	@kt0set8.8
+		endm
+
+;;;;;;;;Timer1;;;;;;;
+kt1reset macro
+		call	@kt1reset
+		endm
+kt1hold8	macro
+		movfw	TMR1H
+		movwf	kreg
+		endm
+kt1hold16	macro
+		call	@kt1hold
+		endm
+
+;;;;;;;;E2Rom;;;;;;;
+ke2seta macro
+		movfw	kreg
+		call	@ke2seta
+		endm
+ke2geta macro
+		call	@ke2geta
+		movwf	kreg
+		endm
+ke2inca macro
+		call	@ke2inca
+		endm
+ke2deca macro
+		call	@ke2deca
+		endm
+ke2adda macro
+		movfw	kreg
+		call	@ke2adda
+		endm
+ke2read macro
+		call	@ke2read
+		movwf	kreg
+		endm
+ke2write macro
+		movfw	kreg
+		call	@ke2wrt
+		endm
+ke2readn macro	fr
+		movlw	fr
+		movwf	FSR
+		call	@ke2readn
+		endm
+
+;;;;;;;;Communication(KSP);;;;;;;
+kspron	macro
+		call	@ksprcvon
+		endm
+ksproff macro
+		call	@ksprcvoff
+		endm
+kspsend macro
+		movfw	kreg
+		call	@kspsend
+		endm
+kspcheck macro
+		call	@kspcheck
+		endm
+ksptrn	macro
+		movlw	B'11100000'
+		call	@kspsend
+		movfw	kreg
+		call	@kspsend
+		endm
+
+;;;;;;;;Interpolation(KLI);;;;;;;
+kl1load	macro	n
+		movlw	n-1
+		call	@kl1load
+		endm
+
+;;;;;;;;ADC;;;;;;;
+kadstart macro	n
+		movlw	n
+		call	@kadstart
+		endm

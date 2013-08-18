@@ -1,0 +1,1069 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Krisna are
+;1)Multi-bytes integer calcurator
+;      Alignement must be big endian(Low:High)
+;2)KSP:serial communication
+;
+;(C)2000 YOODS co.ltd.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#include	"../krisna/mac"
+
+#define	KT0UP	kintv+3,0
+#define	KT0HI	kintv+4
+#ifdef	TMR0IF
+#define	KT0IR	INTCON,TMR0IF
+#else
+#define	KT0IR	INTCON,T0IF
+#endif
+#ifdef	TMR0IE
+#define	KT0IE	INTCON,TMR0IE
+#else
+#define	KT0IE	INTCON,T0IE
+#endif
+
+;;;;;;;;Krisna Main module;;;;;;;
+kmem	macro	addr
+		cblock	0x7B
+		kintv:5
+		endc
+		cblock	addr
+		kreg:12
+		endc
+		endm
+
+kinit	macro	clock
+		local	exit,i=0
+KCLOCK=clock
+		bsf		INTCON,GIE
+		goto	exit
+@kintv	org		4
+		movwf	kintv
+		movfw	STATUS
+		movwf	kintv+1
+		movfw	PCLATH
+		movwf	kintv+2
+		bcf		PCLATH,3
+		banksel TMR0
+		kjmpns	KT0IR,@kintvA2
+		tstf	KT0HI
+		btfsc	STATUS,Z
+		goto	@kintvB1
+		decf	KT0HI,F
+		goto	@kintvC1
+@kintvB1
+		bsf		KT0UP
+		bcf		KT0IE
+#ifdef	KT0HOOK
+		call	KT0HOOK
+#endif
+@kintvC1
+		bcf		KT0IR
+@kintvA2
+		movfw	kintv+2
+		movwf	PCLATH
+		movfw	kintv+1
+		movwf	STATUS
+		swapf	kintv,F
+		swapf	kintv,W
+		retfie
+@kload8
+		movfw	INDF
+		movwf	kreg
+		return
+@kload16
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		movwf	kreg+1
+		goto	@kload8
+@kload24
+		incf	FSR,F
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		decf	FSR,F
+		movwf	kreg+2
+		goto	@kload16
+@kstore8
+		movfw	kreg
+		movwf	INDF
+		return
+@kstore16
+		movfw	kreg+1
+		incf	FSR,F
+		movwf	INDF
+		decf	FSR,F
+		goto	@kstore8
+@kstore24
+@kstore32
+		movfw	kreg+2
+		incf	FSR,F
+		incf	FSR,F
+		movwf	INDF
+		decf	FSR,F
+		decf	FSR,F
+		goto	@kstore16
+
+@kadd8
+		movfw	INDF
+		addwf	kreg,F
+		return
+@kadd16
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		addwf	kreg+1,F
+		btfss	STATUS,C
+		goto	@kadd8
+		incf	kreg,F
+		goto	@kadd8
+@kadd24
+		incf	FSR,F
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		decf	FSR,F
+		addwf	kreg+2,F
+		btfss	STATUS,C
+		goto	@kadd16
+		incf	kreg+1,F
+		btfss	STATUS,Z
+		goto	@kadd16
+		incf	kreg,F
+		goto	@kadd16
+@ksub8
+		movfw	INDF
+		subwf	kreg,F
+		return
+@ksub16
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		subwf	kreg+1,F
+		btfsc	STATUS,C
+		goto	@ksub8
+		decf	kreg,F
+		goto	@ksub8
+@ksub24
+		incf	FSR,F
+		incf	FSR,F
+		movfw	INDF
+		decf	FSR,F
+		decf	FSR,F
+		subwf	kreg+2,F
+		btfsc	STATUS,C
+		goto	@ksub16
+		decf	kreg+1,F
+		incf	kreg+1,W
+		btfss	STATUS,Z
+		goto	@ksub16
+		decf	kreg,F
+		goto	@ksub16
+@kcmpU8
+		movfw	INDF
+		subwf	kreg,W
+		return
+@kcmpU16
+		call	@kcmpU8
+		btfss	STATUS,Z
+		return
+@kcmpU16.1
+		incf	FSR,F
+		movfw	INDF
+		subwf	kreg+1,W
+		return
+@kcmpS8
+		movfw	INDF
+		xorwf	kreg,W
+		andlw	0x80
+		kjmpz	@kcmpU8
+		bsf		STATUS,C
+		btfsc	kreg,7
+		bcf		STATUS,C
+		return
+@kcmpS16
+		call	@kcmpS8
+		btfss	STATUS,Z
+		return
+		goto	@kcmpU16.1
+@kcvsU8
+@kcvsU16
+@kcvsU24
+@kcvsU32
+		btfsc	kreg,7
+		goto	@kSmax
+		return
+@kcvsS8
+@kcvsS16
+@kcvsS24
+@kcvsS32
+		btfsc	kreg,7
+		goto	@kUmin
+		return
+
+@kinc32
+		incf	kreg+3,F
+		btfss	STATUS,Z
+		return
+@kinc24
+		incf	kreg+2,F
+		btfss	STATUS,Z
+		return
+@kinc16
+		incf	kreg+1,F
+		btfss	STATUS,Z
+		return
+@kinc8
+		incf	kreg,F
+		return
+		
+@knegU8
+		btfsc	kreg,7
+		goto	@kSmin
+		goto	@knegS8
+@knegU16
+		btfsc	kreg,7
+		goto	@kSmin
+		goto	@knegS16
+@knegU24
+		btfsc	kreg,7
+		goto	@kSmin
+		goto	@knegS24
+@knegU32
+		btfsc	kreg,7
+		goto	@kSmin
+		goto	@knegS32
+@knegS8
+		comf	kreg,F
+		goto	@kinc8
+@knegS16
+		comf	kreg,F
+		comf	kreg+1,F
+		goto	@kinc16
+@knegS24
+		comf	kreg,F
+		comf	kreg+1,F
+		comf	kreg+2,F
+		goto	@kinc24
+@knegS32
+		comf	kreg,F
+		comf	kreg+1,F
+		comf	kreg+2,F
+		comf	kreg+3,F
+		goto	@kinc32
+@kSmax
+		kset24 0x7FFFFF
+		return
+@kSmin
+		kset24 0x800000
+		return
+@kUmax
+		kset24 0xFFFFFF
+		return
+@kUmin
+		kset24 0x000000
+		return
+
+@kshrS8
+@kshrS16
+@kshrS24
+@kshrS32
+		btfsc	kreg,7
+		goto	@kshrS32@neg
+		goto	@kshrU32
+@kshrS32@neg
+		call	@knegS32
+		call	@kshrU32
+		goto	@knegS32
+@kshlS8
+		clrf	kreg+1
+@kshlS16
+		clrf	kreg+2
+@kshlS24
+		clrf	kreg+3
+@kshlS32
+		btfsc	kreg,7
+		goto	@kshlS32@neg
+		call	@kshlU32
+		goto	@kcvsU32
+@kshlS32@neg
+		call	@knegS32
+		call	@kshlU32
+		goto	@knegS32
+@kshrU8
+@kshrU16
+@kshrU24
+@kshrU32
+		movwf	kreg+4
+@kshrU32@for
+		clrc
+		rrf		kreg,F
+		rrf		kreg+1,F
+		rrf		kreg+2,F
+		rrf		kreg+3,F
+		decfsz	kreg+4,F
+		goto	@kshrU32@for
+		return
+@kshlU8
+		clrf	kreg+1
+@kshlU16
+		clrf	kreg+2
+@kshlU24
+		clrf	kreg+3
+@kshlU32
+		movwf	kreg+4
+@kshlU32@loop
+		clrc
+		rlf		kreg+3,F
+		rlf		kreg+2,F
+		rlf		kreg+1,F
+		rlf		kreg+0,F
+		btfsc	STATUS,C
+		goto	@kUmax
+		decfsz	kreg+4,F
+		goto	@kshlU32@loop
+		return
+
+@ktrmS16
+@ktrmS24
+@ktrmS32
+		btfsc	kreg,7
+		goto	@ktrmS32@neg
+		tstf	kreg
+		btfss	STATUS,Z
+		goto	@kSmax
+		kmov8 kreg,kreg+1
+		kmov8 kreg+1,kreg+2
+		kmov8 kreg+2,kreg+3
+		btfsc	kreg,7
+		goto	@kSmax
+		return
+@ktrmS32@neg
+		incf	kreg,W
+		btfss	STATUS,Z
+		goto	@kSmin
+		kmov8 kreg,kreg+1
+		kmov8 kreg+1,kreg+2
+		kmov8 kreg+2,kreg+3
+		btfss	kreg,7
+		goto	@kSmin
+		return
+@ktrmU16
+@ktrmU24
+@ktrmU32
+		tstf	kreg
+		btfss	STATUS,Z
+		goto	@kUmax
+		kmov8 kreg,kreg+1
+		kmov8 kreg+1,kreg+2
+		kmov8 kreg+2,kreg+3
+		return
+@kexmS24
+		kmov8 kreg+3,kreg+2
+@kexmS16
+		kmov8 kreg+2,kreg+1
+@kexmS8
+		kmov8 kreg+1,kreg
+		clrf	kreg
+		btfsc	kreg+1,7
+		decf	kreg,F
+		return
+@kexmU24
+		kmov8 kreg+3,kreg+2
+@kexmU16
+		kmov8 kreg+2,kreg+1
+@kexmU8
+		kmov8 kreg+1,kreg
+		clrf	kreg
+		return
+@kmulU8
+		clrf	kreg
+		clrf	kreg+1
+		iorlw	0
+		btfsc	STATUS,Z
+		return
+		clrc
+i = 0
+	while i<8
+		btfsc   INDF,i
+		addwf   kreg,F
+		rrf     kreg,F
+		rrf     kreg+1,F
+i += 1
+	endw
+		return
+@kmulS8
+		btfss	INDF,7
+		goto	@kmulU8
+		comf	INDF,F
+		incf	INDF,F
+		call	@kmulU8
+		comf	INDF,F
+		incf	INDF,F
+		goto	@knegU16
+@kmulS16
+		movwf	kreg+4
+		incf	FSR,F
+		call	@kmulU8
+		kmov16 kreg+2,kreg
+		decf	FSR,F
+		movfw	kreg+4
+		call	@kmulS8
+		movfw	kreg+2
+		addwf	kreg+1,F
+		btfsc	STATUS,C
+		incf	kreg,F
+		kmov8 kreg+2,kreg+3
+		return
+@kdmulS16
+		kmov8 kreg+2,kreg
+		movfw	kreg+1
+		call	@kmulS8
+		kmov16 kreg+5,kreg
+		movfw	kreg+2
+		call	@kmulS16
+		clrf	kreg+4
+		btfsc	kreg+5,7
+		decf	kreg+4,F
+		movlw	kreg+4
+		movwf	FSR
+		goto	@kadd24
+@kmulU16
+		movwf	kreg+4
+		incf	FSR,F
+		call	@kmulU8
+		kmov16 kreg+2,kreg
+		decf	FSR,F
+		movfw	kreg+4
+		call	@kmulU8
+		movfw	kreg+2
+		addwf	kreg+1,F
+		btfsc	STATUS,C
+		incf	kreg,F
+		kmov8 kreg+2,kreg+3
+		return
+@kdmulU16
+		kmov8 kreg+2,kreg
+		movfw	kreg+1
+		call	@kmulU8
+		kmov16 kreg+5,kreg
+		movfw	kreg+2
+		call	@kmulU16
+		clrf	kreg+4
+		btfsc	kreg+5,7
+		decf	kreg+4,F
+		movlw	kreg+4
+		movwf	FSR
+		goto	@kadd24
+@knorm16	;kreg=numerator INDF=denominator
+		movfw	INDF
+		movwf	kreg+2
+		incf	FSR,F
+		movfw	INDF
+		movwf	kreg+3
+		movfw	kreg+2
+		iorwf	kreg+3,W
+		kjmpz	@knorm16.90
+@knorm16.20
+		kjmps	kreg+2,7,@knorm16.90
+		kjmps	kreg,7,@knorm16.90
+		clrc
+		rlf		kreg+3,F
+		rlf		kreg+2,F
+		rlf		kreg+1,F
+		rlf		kreg,F
+		goto	@knorm16.20
+@knorm16.90
+		movfw	kreg+2
+		goto	@knorm8
+@knorm8		;kreg=numerator w=denominator
+		movwf	kreg+2	;denominator
+		clrf	kreg+3
+		kstore8 kreg+4 ;numerator
+		clrf	kreg+5 ;answer
+		kset8	8
+		kstore8	kreg+6	;loop counter
+		kclr16	kreg	;comparer
+@knorm8.10
+		clrc
+		rrf		kreg+2,F
+		rrf		kreg+3,F
+		kadd16	kreg+2
+		movfw	kreg
+		subwf	kreg+4,W
+		btfsc	STATUS,Z
+		clrc
+		rlf		kreg+5,F
+		kjmps	kreg+5,0,@knorm8.90
+		ksub16	kreg+2
+@knorm8.90
+		decfsz	kreg+6,F
+		goto	@knorm8.10
+		kmov8	kreg,kreg+5
+		return
+@kintegU16
+		kmov16	kreg+2,kreg	;so as not to change FSR
+		call	@kadd16
+		kjmps	INDF,7,@kintegU16.10
+		kcmpU16 kreg+2
+		kjmpnc	@kUmax
+		return
+@kintegU16.10
+		kcmpU16 kreg+2
+		kjmpc	@kUmin
+		return
+@kintegS16
+		kmov16	kreg+2,kreg	;so as not to change FSR
+		call	@kadd16
+		kjmps	INDF,7,@kintegS16.10
+		kcmpS16 kreg+2
+		kjmpnc	@kSmax
+		return
+@kintegS16.10
+		kcmpS16 kreg+2
+		kjmpc	@kSmin
+		return
+;;;;;;;common initialization;;;;;;;;;
+exit
+		kset8	0x07
+#ifdef CMCON0
+		kstore8	CMCON0			;disconnect comparator
+#else
+		kstore8	CMCON
+#endif
+#ifdef ANSEL
+		kset8	B'00000000'
+		kstore8	ANSEL			;all digital
+#endif
+#ifdef	OSCCON
+		kset8	B'01110001'		;Internal 8MHz
+		kstore8	OSCCON
+#endif
+		endm
+
+;;;;;;;;KT0 module;;;;;;;
+kt0init	macro	usec
+		local	exit,i=0,ps=2
+		movlw	OPTION_REG
+		movwf	FSR
+		bcf		INDF,T0CS
+		bcf		INDF,PSA
+KT0USEC=usec
+	while ps<KCLOCK/1000*usec/1000000;1000=4*256
+ps *= 2
+i += 1
+	endw
+		movlw	OPTION_REG
+		movwf	FSR
+		bsf		INDF,PS0
+		bsf		INDF,PS1
+		bsf		INDF,PS2
+	if (i&1)==0
+		bcf		INDF,PS0
+	endif
+	if (i&2)==0
+		bcf		INDF,PS1
+	endif
+	if (i&4)==0
+		bcf		INDF,PS2
+	endif
+		goto	exit
+@kt0set8.8
+		kmov8	KT0HI,kreg
+		iorwf	kreg+1,W
+		btfsc	STATUS,Z
+		incf	kreg+1,F
+		movfw	kreg+1
+		sublw	0
+		movwf	TMR0
+		btfsc	STATUS,C
+		decf	KT0HI,F
+@kt0set@ret
+		bcf		KT0IR
+		bsf		KT0IE
+		bcf		KT0UP
+		return
+@kt0set8
+		movwf	KT0HI
+		clrf	TMR0
+		goto	@kt0set@ret
+@kt0set.8
+		clrf	KT0HI
+		sublw	0
+		movwf	TMR0
+		goto	@kt0set@ret
+exit
+		endm
+
+;;;;;;;;KT1 module;;;;;;;
+#define	KT1UP	PIR1,TMR1IF
+kt1init	macro	usec
+		local	i=0,ps=1,exit
+KT1USEC=usec
+	while ps<KCLOCK/1000*usec/1000000;1000=4*256
+ps *= 2
+i += 1
+	endw
+		banksel T1CON
+		bcf		T1CON,TMR1CS
+	if (i&1)==0
+		bcf		T1CON,T1CKPS0
+	else
+		bsf		T1CON,T1CKPS0
+	endif
+	if (i&2)==0
+		bcf		T1CON,T1CKPS1
+	else
+		bsf		T1CON,T1CKPS1
+	endif
+		goto	exit
+@kt1reset
+		clrf	TMR1L
+		clrf	TMR1H
+		bsf		T1CON,TMR1ON
+		bcf		KT1UP
+		return
+@kt1hold
+		movfw	TMR1H
+		movwf	kreg
+		movfw	TMR1L
+		movwf	kreg+1
+		movfw	TMR1H
+		subwf	kreg,W
+		kjmpnz	@kt1hold
+		return
+exit
+		banksel	TMR0
+		endm
+
+;;;;;;;;E2Rom;;;;;;;;;;
+ke2init	macro
+		local	exit,retour
+		banksel	PIR1
+		bcf		PIR1,EEIF
+#ifdef EEPGD
+		banksel	EECON1
+		bcf		EECON1,EEPGD
+#endif
+		goto	exit
+@ke2seta
+		banksel EEADR
+		movwf	EEADR
+		goto	retour
+@ke2read
+		banksel EECON1
+#ifdef EEPGD
+		bcf		EECON1,EEPGD
+#endif
+		bsf		EECON1,RD
+		banksel EEDATA
+		movfw	EEDATA
+		goto	retour
+@ke2geta
+		banksel EEADR
+		movfw	EEADR
+		goto	retour
+@ke2inca
+		banksel EEADR
+		incf	EEADR,F
+		goto	retour
+@ke2deca
+		banksel EEADR
+		decf	EEADR,F
+		goto	retour
+@ke2adda
+		banksel EEADR
+		addwf	EEADR,F
+		goto	retour
+@ke2readn
+		call	@ke2read
+		movwf	INDF
+		incf	FSR,F
+		call	@ke2inca
+		decf	kreg,F
+		kjmpnz	@ke2readn
+retour
+		banksel TMR0
+		return
+exit
+		banksel TMR0
+		endm
+
+;;;;;;;;KSP(serial profile);;;;;;;;
+;uses KT0 module
+kspinit	macro	br
+		local	exit,wait,retour,pc
+#ifdef	RCSTA
+		bsf		PCLATH,3
+		goto	@@kspinit
+@kspsend
+		bsf		PCLATH,3
+		call	@@kspsend
+		bcf		PCLATH,3
+		return
+@ksprcvon
+		bsf		PCLATH,3
+		call	@@ksprcvon
+		bcf		PCLATH,3
+		return
+@ksprcvoff
+		bsf		PCLATH,3
+		call	@@ksprcvoff
+		bcf		PCLATH,3
+		return
+@kspcheck
+		bsf		PCLATH,3
+		call	@@kspcheck
+		bcf		PCLATH,3
+		return
+pc=$
+		org		0x800
+@@kt0set8
+		movwf	KT0HI
+		clrf	TMR0
+		bcf		KT0IR
+		bsf		KT0IE
+		bcf		KT0UP
+		return
+@@ke2wrt
+		banksel EECON1
+		bcf		INTCON,GIE
+		btfsc	INTCON,GIE
+		goto	$-2
+		bsf		EECON1,WREN
+		banksel EEDATA
+		movwf	EEDATA
+		banksel EECON2
+		movlw	0x55
+		movwf	EECON2
+		movlw	0xAA
+		movwf	EECON2
+		bsf		EECON1,WR
+		bsf		INTCON,GIE
+		bcf		EECON1,WREN
+		banksel PIR1
+		btfss	PIR1,EEIF
+		goto	$-1
+		bcf		PIR1,EEIF
+		goto	retour
+@@ke2seta
+		banksel EEADR
+		movwf	EEADR
+		goto	retour
+@@ke2read
+		banksel EECON1
+#ifdef EEPGD
+		bcf		EECON1,EEPGD
+#endif
+		bsf		EECON1,RD
+		banksel EEDATA
+		movfw	EEDATA
+		goto	retour
+@@ke2geta
+		banksel EEADR
+		movfw	EEADR
+		goto	retour
+@@ke2inca
+		banksel EEADR
+		incf	EEADR,F
+		goto	retour
+@@ke2deca
+		banksel EEADR
+		decf	EEADR,F
+		goto	retour
+@@kspinit
+		bsf		RCSTA,SPEN
+		banksel SPBRG
+		movlw	br
+		movwf	SPBRG
+		banksel TXSTA
+		bsf		TXSTA,BRGH
+		bcf		TXSTA,SYNC
+		bsf		TXSTA,TXEN
+		banksel	RCSTA
+		bsf		RCSTA,CREN
+		bcf		PCLATH,3
+		goto	exit
+@@kspsend
+		banksel PIR1
+		kloopns PIR1,TXIF
+		banksel TXREG
+		movwf	TXREG
+		goto	retour
+@@ksprecv
+		banksel RCREG
+		movfw	RCREG
+		goto	retour
+@@ksprcvd		;if receive error is detected,C cleared
+		bsf		STATUS,C	;OK
+		bcf		STATUS,DC	;no DATA
+		banksel	PIR1
+		btfss	PIR1,RCIF
+		goto	retour
+		bsf		STATUS,DC
+		banksel	RCSTA
+		btfsc	RCSTA,OERR
+		bcf		STATUS,C
+		goto	retour
+@@ksprcvon
+		banksel RCSTA
+		bsf		RCSTA,CREN
+		goto	retour
+@@ksprcvoff
+		banksel RCSTA
+		bcf		RCSTA,CREN
+		goto	retour
+@@kspcheck
+		movlw	0xff
+		movwf	kreg
+		movwf	kreg+1
+		call	@@ksprcvd
+		kjmpns	STATUS,DC,@@kspcheck.exit
+		kjmpnc	@@kspcheck.err
+		call	@@ksprecv
+		movwf	kreg
+		andlw	B'11000000'
+		kjmpz	@@kspcheck.read	;read rq
+		sublw	B'01000000'
+		kjmpz	@@kspcheck.wrt	;write rq
+		goto	@@kspcheck.brk
+@@kspcheck.read
+		movlw	30*1000/KT0USEC
+		call	@@kt0set8
+@@kspcheck.read1
+		kjmps	KT0UP,@@kspcheck.exit
+		call	@@ksprcvd
+		kjmpns	STATUS,DC,@@kspcheck.read1
+		kjmpnc	@@kspcheck.err
+		call	@@ksprecv
+		movwf	kreg+1
+		kjmps	kreg,4,@@kspcheck.readee
+		kjmps	kreg,5,@@kspcheck.readdd
+@@kspcheck.readfr
+		movwf	FSR
+		movlw	B'10000000'
+		call	@@kspsend
+		movfw	FSR
+		call	@@kspsend
+		movfw	INDF
+		call	@@kspsend
+		goto	@@kspcheck.brk
+@@kspcheck.readee
+		call	@@ke2seta
+		movlw	B'10010000'
+		call	@@kspsend
+		call	@@ke2geta
+		call	@@kspsend
+		call	@@ke2read
+		call	@@kspsend
+		goto	@@kspcheck.brk
+@@kspcheck.readdd
+		movlw	B'11100000'
+		call	@@kspsend
+		movfw	kreg+1
+		call	@@kspsend
+		movfw	kreg+1
+		kjmptbl
+		goto	@@kspcheck.vec0
+		goto	@@kspcheck.vec1
+		goto	@@kspcheck.vec2
+		goto	@@kspcheck.brk
+@@kspcheck.wrt
+		movlw	30*1000/KT0USEC
+		call	@@kt0set8
+@@kspcheck.wrt1
+		kjmps	KT0UP,@@kspcheck.exit
+		call	@@ksprcvd
+		kjmpns	STATUS,DC,@@kspcheck.wrt1
+		kjmpnc	@@kspcheck.err
+		call	@@ksprecv
+		movwf	kreg+1
+		kjmps	kreg,4,@@kspcheck.wrt1ee
+		movwf	FSR
+		goto	@@kspcheck.wrt1brk
+@@kspcheck.wrt1ee
+		call	@@ke2seta
+@@kspcheck.wrt1brk
+		movlw	30*1000/KT0USEC
+		call	@@kt0set8
+@@kspcheck.wrt2
+		kjmps	KT0UP,@@kspcheck.exit
+		call	@@ksprcvd
+		kjmpns	STATUS,DC,@@kspcheck.wrt2
+		kjmpnc	@@kspcheck.err
+		call	@@ksprecv
+		kjmps	kreg,4,@@kspcheck.wrt2ee
+		movwf	INDF
+		movlw	B'10000000'
+		call	@@kspsend
+		movfw	FSR
+		call	@@kspsend
+		movfw	INDF
+		call	@@kspsend
+		goto	@@kspcheck.brk
+@@kspcheck.wrt2ee
+		call	@@ke2wrt
+		movlw	B'10010000'
+		call	@@kspsend
+		call	@@ke2geta
+		call	@@kspsend
+		call	@@ke2read
+		call	@@kspsend
+		goto	@@kspcheck.brk
+@@kspcheck.brk
+		movlw	30*1000/KT0USEC
+		call	@@kt0set8
+@@kspcheck.brk1
+		kjmps	KT0UP,@@kspcheck.exit
+		call	@@ksprcvd
+		kjmpns	STATUS,DC,@@kspcheck.brk1
+		kjmpnc	@@kspcheck.err
+		call	@@ksprecv
+		goto	@@kspcheck.brk
+@@kspcheck.err
+		call	@@ksprcvoff
+		movlw	30*1000/KT0USEC
+		call	@@kt0set8
+		kloopns	KT0UP
+		call	@@ksprcvon
+@@kspcheck.exit
+		return
+@@kspcheck.vec0
+		movlw	0
+		call	@@ke2seta
+@@kspcheck.vec0.10
+		call	@@ke2read
+		call	@@kspsend
+		call	@@ke2inca
+		call	@@ke2geta
+		iorlw	0
+		kjmpnz	@@kspcheck.vec0.10
+		goto	@@kspcheck.brk
+@@kspcheck.vec1
+#ifdef	KSPHOOK1
+		bcf		PCLATH,3
+		call	KSPHOOK1
+		bsf		PCLATH,3
+#endif
+		goto	@@kspcheck.brk
+@@kspcheck.vec2
+#ifdef	KSPHOOK2
+		bcf		PCLATH,3
+		call	KSPHOOK2
+		bsf		PCLATH,3
+#endif
+		goto	@@kspcheck.brk
+@@kspcheck.vec3
+#ifdef	KSPHOOK3
+		bcf		PCLATH,3
+		call	KSPHOOK3
+		bsf		PCLATH,3
+#endif
+		goto	@@kspcheck.brk
+
+retour
+		banksel TMR0
+		return
+		org		pc
+exit
+		banksel TMR0
+#else
+		goto	exit
+@kspcheck
+		kset16	0xffff
+@kspsend
+@ksprcvon
+@ksprcvoff
+		return
+exit
+#endif
+		endm
+
+;;;;;;;;Linnear interpolator;;;;;;;;;;
+kl1init	macro
+		local	exit
+		goto	exit
+@kl1load
+		movwf	kreg+2
+		kmulU8xU8 kreg+2
+		kmov8	kreg+2,kreg+1
+		movfw	kreg
+		call	@ke2adda
+		call	@ke2read
+		movwf	kreg+3
+		call	@ke2inca
+		call	@ke2read
+		movwf	kreg+4
+		kmov16	kreg,kreg+3
+		movfw	kreg+2
+@kl1ip
+		movwf	kreg+2
+		kmov16	kreg+3,kreg
+		kset8	255
+		ksub8	kreg+2
+		kmulU8xU8 kreg+3
+		kmov16 kreg+5,kreg
+		kload8	kreg+2
+		kmulU8xU8 kreg+4
+		kadd16	kreg+5
+		return
+exit
+		endm
+;;;;;;;;ADC;;;;;;;;;;
+kadinit	macro
+		local	exit
+#ifdef	ADCON1
+		banksel ADCON1
+		bsf		ADCON1,ADCS0	;A/D conversion timer as internal
+		bsf		ADCON1,ADCS1
+		bsf		ADCON1,ADCS2
+#else
+		banksel	ANSEL
+		bsf		ANSEL,ADCS0
+		bsf		ANSEL,ADCS1
+		bsf		ANSEL,ADCS2
+#endif
+		goto	exit
+@kadstart
+		movwf	kreg
+		movlw	kreg
+		movwf	FSR
+		banksel	ADCON0
+		clrf	ADCON0
+		bsf		ADCON0,ADON
+		kjmps	INDF,0,@kadstart.1
+		banksel	ANSEL
+		bsf		ANSEL,0
+		call	@kadsettle
+		banksel	ANSEL
+		bcf		ANSEL,0
+		goto	@kadret
+@kadstart.1
+		bsf		ADCON0,CHS0	;adchannel 1
+		banksel	ANSEL
+		bsf		ANSEL,1
+		call	@kadsettle
+		banksel	ANSEL
+		bcf		ANSEL,1
+@kadret
+		banksel	kreg
+		movwf	kreg
+		return
+@kadsettle
+		movlw	10
+		addlw	255
+		btfss	STATUS,Z
+		goto	$-2
+		banksel ADCON0
+		bsf		ADCON0,GO
+		btfsc	ADCON0,GO
+		goto	$-1
+		banksel ADRESH
+		movfw	ADRESH
+		banksel	ADCON0
+		bcf		ADCON0,ADON
+		return
+exit
+		banksel	TMR0
+		endm

@@ -1,0 +1,231 @@
+#define	ktmp	kreg+8
+
+	cblock
+	madr,mscl
+	srev,sret,sga1,sgb2
+;vars
+	aghi:2
+	aglo,agmi
+	atba,atim,aglk
+	abe,adbe:2
+	arev
+	endc
+
+#ifdef M443	;D34-W24-H3(BassOne pla-spool)
+#define	WSOUND
+Adata macro
+	org	0x2100+48
+	de	6,200,200,200
+	de	0,0,0,0
+	de	100,10,50,50
+	de	25,100,25,120
+	de	25,120,25,120
+	de	0,120,0,0
+	endm
+#endif
+#ifdef M414	;D34-W21-H4(Exsence pla-spool)
+#define	MOPTION	4	;halt on
+Adata macro
+	org	0x2100+48
+	de	6,240,220,200
+	de	180,160,150,140
+	de	85,10,50,50
+	de	25,120,25,120
+	de	50,120,50,120
+	de	0,120,0,0
+	endm
+#endif
+#ifdef M022	;D30-W22-H2
+#define	WSOUND
+Adata macro
+	org	0x2100+48
+	de	6,120,120,120
+	de	0,0,0,0
+	de	240,10,50,50
+	de	25,100,25,120
+	de	25,120,25,120
+	de	0,120,0,0
+	endm
+#endif
+#ifdef M4571	;D34-W25-H7(Scorpion) Type-I
+#define	MOPTION	4	;halt on
+#define	WSOUND
+Adata macro
+	org	0x2100+48
+	de	4,170,170,170
+	de	32,64,96,255
+	de	120,140,80,60
+	de	60,80,0,0
+	de	255,255,150,100	;brake table
+	de	70,50,40,30
+	endm
+#endif
+
+mdata	macro	ofs
+	kset8	ofs
+	call		tbl@read
+	endm
+
+Aset macro
+	local	@10,@20,@21,@22,@100
+	kstor8	ktmp	;mode
+	kset8	48
+@10
+	kstor8	madr
+	ke2seta
+	ke2read
+	kcmpU8	ktmp
+	kjmpc	@20
+	kset8	48
+	kadd8	madr
+	goto		@10
+@20
+	ksub8	ktmp
+	ke2adda
+	ke2inca
+	ke2read
+	kstor8	mscl
+;	kstor8	B2pi	;test
+#ifdef	WSOUND
+	kset8	3
+	ke2adda
+	ke2read
+	kstor8	arev	;use as sound threshold
+#endif
+	kset8	8
+	call		tbl@seta
+	kset8	8
+	ke2readn srev
+	kmov8	B2pi,srev
+;	kmov8	mscl,zovr ;test
+	kjmpns	mscl,0,@22
+	bsf		oflag,1	;stoll control on
+@22
+	kset8	255
+	kexlU8
+	kstor16	aghi
+	kset8	12
+	call		tbl@seta
+	kset8	2
+	ke2readn atim
+	goto		@100
+tbl@seta
+	kadd8	madr
+	ke2seta
+	return
+tbl@read
+	call		tbl@seta
+	ke2read
+	return
+@100
+	endm
+Aaccel	macro
+	kmov8	brkrate,mscl
+	endm
+Atop		macro
+	local	exit
+	kjmps	oflag,1,exit	;stoll control on
+#ifdef	WSOUND
+	kload8	we
+	kcmpU8	arev
+	kjmpnc	exit
+#endif
+	clrf		tpwm	;sound on
+exit
+	clrf		srev
+	clrf		arev
+	clrf		atba
+	endm
+Ascan	macro
+	local	s00,s01,s02,exit
+	tstf		sret
+	btfsc	STATUS,Z
+	incf		srev,F
+	kload16	be
+	kshlS16	3
+	kstor8	abe
+	kload8	we
+	kmulU8xS16 dbe
+	kshrS24 3
+	ktrmS24
+	kstore16	adbe
+
+	kload8	aghi
+	kmulU8xU8 aglk
+	kstor8	aglo
+	kload8	aghi
+	ksub8	aglo
+	kshrU8	1
+	kadd8	aglo
+	kstor8	agmi
+
+	kload8	sga1
+	kmulU8xS8 abe
+	kadd16	adbe
+	kstor8	ktmp
+	kjmpns	kreg,7,s00
+	tstf		sret
+	btfsc	STATUS,Z
+	incf		arev,F
+s00
+	kload8	abe
+	ksub8	sgb2
+	kstore8	ktmp+1
+	kload8	sga1
+	kmulU8xS8 ktmp+1
+	kcmpS16	adbe
+	kjmpnc	s01
+	kload8	agmi
+	goto		exit
+s01
+	kjmps	ktmp,7,s02
+	kload8	aglo
+	goto		exit
+s02
+	kload8	aghi
+	goto		exit
+exit
+	kmulU8xU8 mscl
+	kstor8	brkrate
+	endm
+Adecel0 macro
+	local	exit
+	tstf		sret
+	btfss	STATUS,Z
+	decf		sret,F
+	decf		atim,F
+	kjmpnz	exit
+	kload8	arev
+	knorm8	srev
+	kstor8	ktmp
+	kmov8	kreg,aglo
+	kmov8	kreg+1,aghi
+	movfw	ktmp
+	call		@kl1ip
+	kstor16	aghi
+	kset8	14
+	kadd8	atba
+	call		tbl@seta
+	kset8	2
+	ke2readn atim
+	kset8	2
+	kadd8	atba
+	kstor8	atba
+	clrf		arev
+	clrf		srev
+exit
+	endm
+Adecel1 macro
+	endm
+Adecel2 macro
+	endm
+Adecel3 macro
+	endm
+Awat	macro
+	local	odd,exit
+	kjmps	kreg,0,odd
+	kload8	arev
+	goto		exit
+odd
+exit
+	endm

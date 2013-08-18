@@ -1,0 +1,289 @@
+	cblock
+	madr,mscl
+	srev,srew,sglo,srka
+	srni,srnj
+;vars
+	aghi,aglo,agrk:2
+	abey:2,asrx
+	arbi
+	atbi,arev
+	endc
+
+#ifdef M443	;D34-W24-H3(BassOne pla-spool)
+#define	OMEGASOUND
+Adata macro
+	org	0x2100+48
+	de	6,200,180,160
+	de	0,0,0,0
+	de	100,140,80,60
+	de	60,80,0,0
+	de	255,255,150,100	;brake table
+	de	70,50,40,30
+	endm
+#endif
+#ifdef M414	;D34-W21-H4(Exsence pla-spool)
+Adata macro
+	org	0x2100+48
+	de	6,200,190,180
+	de	170,160,150,140
+	de	120,140,80,60
+	de	60,80,0,0
+	de	255,255,150,100	;brake table
+	de	70,50,40,30
+	endm
+#endif
+#ifdef M4571	;D34-W25-H7(Scorpion) Type-I
+#define	OMEGASOUND
+Adata macro
+	org	0x2100+48
+	de	4,170,170,170
+	de	32,64,96,255
+	de	120,140,80,60
+	de	60,80,0,0
+	de	255,255,150,100	;brake table
+	de	70,50,40,30
+	endm
+#endif
+#ifdef M022	;D30-W22-H2
+#define	OMEGASOUND
+Adata macro
+	org	0x2100+48
+	de	6,130,130,130
+	de	0,0,0,0
+	de	240,140,80,60
+	de	60,80,0,0
+	de	255,255,150,100	;brake table
+	de	70,50,40,30
+	endm
+#endif
+
+mdata	macro	ofs
+	kset8	ofs
+	call		tbl@read
+	endm
+tdata	macro	ofs
+	kset8	ofs
+	kadd8	arev
+	call		tbl@seta
+	kload8	atbi
+	kl1load	2
+	endm
+
+Aset macro
+	local	@10,@20,@21,@22,@100
+	kstor8	kreg+8	;mode
+	kset8	48
+@10
+	kstor8	madr
+	ke2seta
+	ke2read
+	kcmpU8	kreg+8
+	kjmpc	@20
+	kset8	48
+	kadd8	madr
+	goto		@10
+@20
+	ksub8	kreg+8
+	ke2adda
+	ke2inca
+	ke2read
+	kstor8	mscl
+;	kstor8	B2pi	;test
+#ifdef	OMEGASOUND
+	kset8	3
+	ke2adda
+	ke2read
+	kstor8	arev	;use as sound threshold
+#endif
+	kset8	8
+	call		tbl@seta
+	kset8	8
+	ke2readn srev
+	kmov8	B2pi,srev
+;	kmov8	mscl,zovr ;test
+	kjmpns	mscl,0,@22
+	bsf		oflag,1	;stoll control on
+@22
+	kload8	srni
+	kshrU8	2
+	kstor8	srni
+	kload8	srnj
+	kshrU8	2
+	kstor8	srnj
+	call		rb@init
+	goto		@100
+tbl@seta
+	kadd8	madr
+	ke2seta
+	return
+tbl@read
+	call		tbl@seta
+	ke2read
+	return
+rb@push
+	movlw	0xA0
+	addwf	arbi,W
+	movwf	FSR
+	kmov8	INDF,kreg
+	incf		arbi,W
+	andlw	0x1F
+	movwf	arbi
+	return
+rb@pull
+	incf		kreg,W
+	subwf	arbi,W
+	andlw	0x1F
+	addlw	0xA0
+	movwf	FSR
+	kmov8	kreg,INDF
+	return
+rb@init
+	clrf		arbi
+	kset8	0
+rb@init@loop
+	call		rb@push
+	tstf		arbi
+	kjmpnz	rb@init@loop
+	return
+@100
+	endm
+Aaccel	macro
+	kmov8	brkrate,mscl
+	endm
+Atop		macro
+	local	exit
+	clrf		asrx
+	kclr16	abey
+	kset16	65535
+	kstor8	aghi
+	kstor8	aglo
+	kstor16	agrk
+	kjmps	oflag,1,exit	;stoll control on
+#ifdef	OMEGASOUND
+	kload8	we
+	kcmpU8	arev
+	kjmpnc	exit
+#endif
+	clrf		tpwm	;sound on
+exit
+	clrf		arev
+	clrf		srev
+	clrf		atbi
+	endm
+Ascan	macro
+	local	rev1,rev2,rev3,r01,r02,r31,smc,brhi,brlo,exit
+	incf		srev,F
+	kjmps	arev,7,rev3
+	kjmps	arev,6,rev2
+	kjmps	arev,5,rev1
+	kmov16	abey,be
+	kload8	srev
+	kcmpU8	srew
+	kjmpc	r01
+	knorm8	srew
+	kstor8	atbi	;rev table index
+	goto		r02
+r01
+	incf		arev,F
+	clrf		srev
+	clrf		atbi
+r02
+	tdata	16
+	kstor8	aghi
+	kmulU8xU8 sglo
+	kstor8	aglo
+	bsf		arev,5
+	goto		smc
+rev1
+	kload16	abey
+	kadd16	be
+	kstor16	abey
+	kload16	tcount
+	kshlU16	3
+	kmulU8xU8 asrx
+	kstor16	kreg+8
+	kload8	srka
+	kmulU8xU16 kreg+8
+	kshlU16	3
+	kstore16	kreg+8
+	kload16	agrk
+	ksub16	kreg+8
+	kstor16	agrk
+	bsf		arev,6
+	goto		smc
+rev2
+	kload16	abey
+	kadd16	be
+	kstor16	abey
+	bsf		arev,7
+	goto		smc
+rev3
+	bcf		arev,5
+	bcf		arev,6
+	bcf		arev,7
+	clrf		asrx
+	kload16	abey
+	kadd16	be
+	kcvsS16
+	kshlU16	1
+	kstore8	kreg+8
+	call		rb@push
+	clrf		kreg+9	;max trace
+	kload8	srni
+	kstor8	kreg+10
+r31
+	call		rb@pull
+	kmaxU8	kreg+9
+	kstore8	kreg+9
+	incf		kreg+10,F
+	kload8	kreg+10
+	kcmpU8	srnj
+	kjmpnc	r31
+	kload8	kreg+9
+	kmulU8xU8 kreg+8
+	kstore16 kreg+10	;a*b
+	kcmpL16	0
+	kjmpz	smc
+	kload8	kreg+8
+	kshrU8	1
+	kstor8	kreg+8
+	kload8	kreg+9
+	kshrU8	1
+	kadd8	kreg+8
+	kexlU8
+	kstor16	kreg+8	;(a+b)/2
+	kload16	kreg+10
+	knorm16	kreg+8
+	kstor8	asrx
+smc
+	kjmps	be,7,brhi
+	kjmps	dbe,7,brhi
+	kload8	aglo
+	goto	exit
+brhi
+	kload8	agrk
+	kminU8	aghi
+	kmaxU8	aglo
+exit
+	kmulU8xU8 mscl
+	kstor8	brkrate
+	endm
+Adecel0 macro
+	endm
+Adecel1 macro
+	endm
+Adecel2 macro
+	endm
+Adecel3 macro
+	endm
+Awat	macro
+	local	odd,exit
+	kjmps	kreg,0,odd
+	kload8	asrx
+	goto	exit
+odd
+	kload8	atbi
+;	kset8	20
+;	call	rb@pull
+exit
+	endm
